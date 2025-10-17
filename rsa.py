@@ -28,66 +28,114 @@ a number very quickly:
 # decrypted = pow(encrypted,d,n)
 # assert decrypted == data
 
-import random
 
+"""
+RSA encryption algorithm
+— keygen + encrypt/decrypt routines
+— simple self-test harness built in
+#!/usr/bin/env python3
+"""
+
+"""import random
+from sympy import isprime
 
 def generate_key(k, seed=None):
-    """
-    the RSA key generating algorithm
-    k is the number of bits in n
-    """
-
     def modinv(a, m):
-        """calculate the inverse of a mod m
-        that is, find b such that (a * b) % m == 1"""
         b = 1
-        while not (a * b) % m == 1:
+        while (a * b) % m != 1:
             b += 1
         return b
 
-    def gen_prime(k, seed=None):
-        """generate a prime with k bits"""
-
-        def is_prime(num):
-            if num == 2:
-                return True
-            for i in range(2, int(num ** 0.5) + 1):
-                if num % i == 0:
-                    return False
-            return True
-
+    def gen_prime(bits, seed=None):
         random.seed(seed)
         while True:
-            key = random.randrange(int(2 ** (k - 1)), int(2 ** k))
-            if is_prime(key):
-                return key
+            p = random.randrange(2**(bits-1), 2**bits)
+            if isprime(p):       # <-- use sympy to test
+                return p          # <— return the *prime* candidate
 
-    # size in bits of p and q need to add up to the size of n
-    p_size = k / 2
-    q_size = k - p_size
+    print(f" Generating two {k}-bit primes…", end="", flush=True)
+    e = gen_prime(k, seed)
+    print(" ✓e", end="", flush=True)
 
-    e = gen_prime(k, seed)  # in many cases, e is also chosen to be a small constant
+    half = k // 2
+    p = gen_prime(half, seed)
+    while p % e == 1:
+        p = gen_prime(half, seed)
+    print(" ✓p", end="", flush=True)
 
-    while True:
-        p = gen_prime(p_size, seed)
-        if p % e != 1:
-            break
-
-    while True:
-        q = gen_prime(q_size, seed)
-        if q % e != 1:
-            break
+    q = gen_prime(k-half, seed)
+    while q % e == 1:
+        q = gen_prime(k-half, seed)
+    print(" ✓q")
 
     n = p * q
-    l = (p - 1) * (q - 1)  # calculate totient function
-    d = modinv(e, l)
+    phi = (p-1)*(q-1)
+    d = modinv(e, phi)
+    return n, e, d """
 
-    return int(n), int(e), int(d)
+from sympy import randprime, mod_inverse
+
+def gen_prime(bits):
+    return randprime(2**(bits-1), 2**bits)
+
+def generate_key(k, seed=None):
+    print(f" Generating two {k}-bit primes…", end="", flush=True)
+    e = gen_prime(k)
+    print(" ✓e", end="", flush=True)
+
+    half = k//2
+    p = gen_prime(half)
+    while p % e == 1:
+        p = gen_prime(half)
+    print(" ✓p", end="", flush=True)
+
+    q = gen_prime(k-half)
+    while q % e == 1:
+        q = gen_prime(k-half)
+    print(" ✓q")
+
+    n = p*q
+    phi = (p-1)*(q-1)
+    d = mod_inverse(e, phi)
+    return n, e, d
 
 
-def encrypt(data, e, n):
-    return pow(int(data), int(e), int(n))
+def encrypt_int(m_int, e, n):
+    return pow(m_int, e, n)
 
+def decrypt_int(c_int, d, n):
+    return pow(c_int, d, n)
 
-def decrypt(data, d, n):
-    return pow(int(data), int(d), int(n))
+def str_to_int(s: str) -> int:
+    return int.from_bytes(s.encode("utf-8"), "big")
+
+def int_to_str(i: int) -> str:
+    return i.to_bytes((i.bit_length()+7)//8, "big").decode("utf-8")
+
+if __name__ == "__main__":
+    # *** Quick demo with very small keys for instant feedback ***
+    print(" Running quick 64-bit demo…")
+    n, e, d = generate_key(64, seed=42)
+    msg = "Hi"
+    m_int = str_to_int(msg)
+    c = encrypt_int(m_int, e, n)
+    p = decrypt_int(c, d, n)
+    recovered = int_to_str(p)
+    print(f" • msg={msg!r}, recovered={recovered!r}")
+    assert recovered == msg
+    print(" 64-bit self-test OK\n")
+
+    # *** Full 512-bit generation (will take a few seconds) ***
+    print("🔑 Generating real 512-bit keypair…")
+    n, e, d = generate_key(512)
+    message = "Hello, RSA!"
+    print(f"Original message: {message!r}")
+    m_int = str_to_int(message)
+    cipher = encrypt_int(m_int, e, n)
+    print(f"Encrypted (hex, first 60 chars): {hex(cipher)[2:62]}…")
+    plain_int = decrypt_int(cipher, d, n)
+    plaintext = int_to_str(plain_int)
+    print(f"Decrypted message: {plaintext!r}")
+    assert plaintext == message
+    print(" RSA self-test passed!")
+
